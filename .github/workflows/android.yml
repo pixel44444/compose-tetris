@@ -1,40 +1,74 @@
-# This is a basic workflow to help you get started with Actions
+            2ce2ff952e150baf28a29cda70a363b0340b3e81a55f43e51ec5edffc3d066c1 \
+            "$RUNNER_TEMP/detekt.jar" | sha256sum --check
 
-name: CI
+      - name: Detekt futtatasa
+        shell: bash
+        run: |
+          set +e
+          java -jar "$RUNNER_TEMP/detekt.jar" \
+            --input app/src/main/java \
+            --base-path "$GITHUB_WORKSPACE" \
+            --language-version 1.6 --jvm-target 1.8 \
+            --report html:reports/detekt.html \
+            --report xml:reports/detekt.xml \
+            --report sarif:reports/detekt.sarif \
+            2>&1 | tee reports/detekt-console.txt
+          result=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$result" > reports/detekt-exit-code.txt
+          if [[ "$result" -ne 0 && "$result" -ne 2 ]]; then
+            exit "$result"
+          fi
 
-# Controls when the action will run. 
-on:
-  # Triggers the workflow on push or pull request events but only for the main branch
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+      - name: Detekt riportok mentese
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: detekt-eredmenyek
+          path: reports/
+          retention-days: 90
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+  android-lint:
+    name: Android Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
-      - name: Setup JDK
-        uses: actions/setup-java@v2
+      - name: Android SDK elokeszitese
+        shell: bash
+        run: |
+          mkdir -p reports
+          git rev-parse HEAD > reports/commit.txt
+          date -u > reports/run-date.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-32" "build-tools;30.0.3" \
+            2>&1 | tee reports/sdk-setup.txt
+
+      - uses: actions/setup-java@v6
         with:
+          distribution: temurin
           java-version: '11'
-          distribution: 'adopt'
 
-      - name: Build APK
-        run: bash ./gradlew assembleDebug --stacktrace
-      - name: Upload APK
-        uses: actions/upload-artifact@v2
+      - name: Android Lint futtatasa
+        shell: bash
+        run: |
+          java -version 2> reports/java-version.txt
+          chmod +x gradlew
+          set +e
+          ./gradlew --no-daemon --console=plain :app:lintDebug \
+            2>&1 | tee reports/android-lint-console.txt
+          result=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$result" > reports/android-lint-exit-code.txt
+          exit "$result"
+
+      - name: Android Lint riportok mentese
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: app-debug.apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: android-lint-eredmenyek
+          path: |
+            reports/
+            app/build/reports/lint-results*
+          retention-days: 90
