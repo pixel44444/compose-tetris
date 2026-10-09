@@ -1,3 +1,35 @@
+name: Statikus elemzes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detekt:
+    name: Detekt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Detekt letoltese
+        shell: bash
+        run: |
+          mkdir -p reports
+          git rev-parse HEAD > reports/commit.txt
+          date -u > reports/run-date.txt
+          java -version 2> reports/java-version.txt
+          curl --fail --location --retry 3 \
+            https://github.com/detekt/detekt/releases/download/v1.23.8/detekt-cli-1.23.8-all.jar \
+            --output "$RUNNER_TEMP/detekt.jar"
+          printf '%s  %s\n' \
             2ce2ff952e150baf28a29cda70a363b0340b3e81a55f43e51ec5edffc3d066c1 \
             "$RUNNER_TEMP/detekt.jar" | sha256sum --check
 
